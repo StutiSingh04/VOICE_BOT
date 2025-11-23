@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoiceBot Pro | Instant Load</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Tailwind Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
+                    colors: { 
+                        glass: 'rgba(15, 23, 42, 0.7)', 
+                        glassBorder: 'rgba(255, 255, 255, 0.08)',
+                        primary: '#6366f1', // Indigo 500
+                        success: '#10b981', // Emerald 500
+                        warning: '#f59e0b', // Amber 500
+                    },
+                    animation: { 
+                        'fade-in': 'fadeIn 0.4s ease-out forwards',
+                        'pulse-slow': 'pulse 3s infinite'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Base & Typography */
+        body {
+            background-color: #0f172a; /* Slate 900 */
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.1) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: #e2e8f0;
+            overflow: hidden;
+        }
+
+        /* Glassmorphism Utilities */
+        .glass-panel {
+            background: var(--glass);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glassBorder);
+        }
+        
+        /* Chat Bubbles */
+        .msg-bot {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(79, 70, 229, 0.2) 100%);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-top-left-radius: 2px;
+        }
+        .msg-user {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-top-right-radius: 2px;
+        }
+
+        /* Scrollbar */
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { bg: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        /* Animations */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Visualizer Bars */
+        .viz-bar {
+            width: 6px;
+            background: #818cf8;
+            border-radius: 99px;
+            height: 6px;
+            transition: all 0.1s ease;
+            opacity: 0.6;
+        }
+        .viz-active .viz-bar {
+            animation: equalizer 0.5s ease-in-out infinite alternate;
+            opacity: 1;
+            box-shadow: 0 0 10px rgba(129, 140, 248, 0.5);
+        }
+        @keyframes equalizer { 0% { height: 8px; } 100% { height: 32px; } }
+        .viz-bar:nth-child(1) { animation-delay: -0.4s; }
+        .viz-bar:nth-child(2) { animation-delay: -0.2s; }
+        .viz-bar:nth-child(3) { animation-delay: 0s; }
+        .viz-bar:nth-child(4) { animation-delay: -0.3s; }
+        .viz-bar:nth-child(5) { animation-delay: -0.1s; }
+
+        /* Modal */
+        .modal-backdrop {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col text-sm md:text-base">
+
+    <!-- NAV HEADER -->
+    <nav class="h-16 glass-panel border-b-0 border-b-white/5 flex items-center justify-between px-6 shrink-0 z-30 relative shadow-lg">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                <i class="fas fa-database text-white text-xs"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-slate-100 tracking-tight leading-none">VOICE<span class="text-indigo-400">BOT</span></h1>
+                <div class="flex items-center gap-1.5 mt-0.5">
+                    <span id="cloud-status-dot" class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                    <span id="cloud-status-text" class="text-[10px] text-slate-500 font-mono uppercase tracking-wider">Local Mode</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <!-- Connection Indicator -->
+            <div id="status-pill" class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 transition-colors">
+                <span id="status-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+                <span id="status-text" class="text-[11px] font-mono font-bold text-slate-400 uppercase">Ready</span>
+            </div>
+
+            <!-- Settings Button -->
+            <button onclick="ui.toggleSettings()" class="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
+                <i class="fas fa-cog"></i>
+            </button>
+        </div>
+    </nav>
+
+    <!-- MAIN LAYOUT -->
+    <div class="flex-1 flex overflow-hidden relative">
+        
+        <!-- LEFT SIDEBAR (Data & Analytics) -->
+        <aside class="hidden md:flex flex-col w-80 glass-panel border-r-0 border-r-white/5 h-full z-20 shadow-2xl">
+            <!-- Top Metrics -->
+            <div class="p-6 border-b border-white/5 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-[11px] font-bold text-slate-500 uppercase tracking-widest">System Metrics</h3>
+                    <i class="fas fa-chart-line text-slate-600 text-xs"></i>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="p-3 bg-white/5 rounded-xl border border-white/5">
+                        <div class="text-[10px] text-slate-400 font-medium uppercase mb-1">Queries</div>
+                        <div id="stat-queries" class="text-xl font-mono font-bold text-indigo-400">0</div>
+                    </div>
+                    <div class="p-3 bg-white/5 rounded-xl border border-white/5">
+                        <div class="text-[10px] text-slate-400 font-medium uppercase mb-1">Latency</div>
+                        <div id="stat-latency" class="text-xl font-mono font-bold text-emerald-400">0ms</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Database Viewer -->
+            <div class="flex-1 flex flex-col min-h-0 p-6 bg-black/20">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Data Store</h3>
+                    <span class="text-[10px] font-mono text-indigo-500 bg-indigo-500/10 px-2 py-0.5 rounded">JSON</span>
+                </div>
+                <div class="flex-1 bg-[#0B1120] rounded-xl border border-white/5 relative overflow-hidden group shadow-inner">
+                   
+                    <pre id="db-view" class="h-full p-4 text-[10px] leading-relaxed font-mono text-slate-400 overflow-auto custom-scroll"></pre>
+                </div>
+                <button onclick="dbService.reset()" class="mt-4 py-2 px-4 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-all flex items-center justify-center gap-2">
+                    <i class="fas fa-cloud-upload-alt"></i> Reset Data
+                </button>
+            </div>
+        </aside>
+
+        <!-- CHAT AREA -->
+        <main class="flex-1 flex flex-col relative z-10">
+            <!-- Chat Container -->
+            <div id="chat-container" class="flex-1 overflow-y-auto custom-scroll p-4 md:p-8 space-y-6 pb-48">
+                <!-- Welcome Message -->
+                <div class="flex gap-4 animate-fade-in">
+                    <div class="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0 text-white text-sm shadow-lg shadow-indigo-900/20">
+                        <i class="fas fa-bolt"></i>
+                    </div>
+                    <div class="msg-bot px-6 py-4 rounded-2xl text-slate-200 shadow-lg max-w-[90%] md:max-w-[80%]">
+                        <p class="font-medium text-indigo-200 mb-1 text-xs uppercase tracking-wide">System Ready</p>
+                        <p class="leading-relaxed">I am ready instantly. Connecting to cloud in background...</p>
+                        <p class="mt-3 text-sm text-slate-400 border-t border-white/10 pt-3">
+                            <i class="fas fa-database mr-1"></i> You can start asking about orders or balances right now.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BOTTOM CONTROLS -->
+            <div class="absolute bottom-0 left-0 w-full p-4 md:p-8 bg-gradient-to-t from-[#0f172a] via-[#0f172a] to-transparent pointer-events-none z-30">
+                <div class="pointer-events-auto max-w-2xl mx-auto">
+                    
+                    <!-- Transcript Preview -->
+                    <div class="mb-4 text-center min-h-[24px]">
+                        <p id="live-transcript" class="text-lg font-medium text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-purple-300 drop-shadow-sm transition-opacity duration-200 opacity-0">...</p>
+                    </div>
+
+                    <!-- Control Capsule -->
+                    <div class="glass-panel rounded-full p-2 pl-8 flex items-center gap-6 shadow-2xl shadow-black/50 ring-1 ring-white/10 backdrop-blur-xl">
+                        
+                        <!-- Visualizer -->
+                        <div id="visualizer" class="flex gap-1 h-8 items-center w-16 justify-center">
+                            <div class="viz-bar"></div><div class="viz-bar"></div><div class="viz-bar"></div>
+                            <div class="viz-bar"></div><div class="viz-bar"></div>
+                        </div>
+
+                        <!-- Status Text -->
+                        <div class="flex-1 flex flex-col justify-center border-l border-white/10 pl-6 h-10">
+                            <span id="mic-status-main" class="text-sm font-medium text-slate-200">Microphone Ready</span>
+                            <span id="mic-status-sub" class="text-[10px] text-slate-500">Tap button to speak</span>
+                        </div>
+
+                        <!-- Mic Button -->
+                        <button id="mic-btn" class="w-14 h-14 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center shadow-[0_0_25px_rgba(79,70,229,0.4)] hover:shadow-[0_0_35px_rgba(79,70,229,0.6)] transition-all active:scale-95 group border border-indigo-400/30">
+                            <i class="fas fa-microphone text-xl group-hover:scale-110 transition-transform"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- SETTINGS MODAL -->
+    <div id="settings-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop animate-fade-in">
+        <div class="glass-panel bg-[#1e293b] w-full max-w-md p-6 rounded-2xl shadow-2xl border border-white/10 mx-4">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-bold text-white">Settings</h2>
+                <button onclick="ui.toggleSettings()" class="text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-2 uppercase">Google Gemini API Key</label>
+                    <input type="password" id="api-key-input" placeholder="Paste your API key here..." 
+                        class="w-full bg-black/30 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder-slate-600">
+                    <p class="mt-2 text-[10px] text-slate-500">
+                        Leave empty to use Offline Mode strictly. Key is stored in browser memory only.
+                    </p>
+                </div>
+                
+                <button onclick="app.saveSettings()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-lg font-medium text-sm transition-colors shadow-lg shadow-indigo-900/20">
+                    Save Configuration
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+       
+        const DEFAULT_DB_TEMPLATE = {
+            "user": { "name": "STUTI SINGH", "id": "U22CE067", "balance": 42500.50, "currency": "INR", "tier": "DIAMOND" },
+            "orders": [
+                { "id": "#8821", "item": "Sony WH-1000XM5", "status": "Shipped", "cost": 348, "eta": "2 Days" },
+                { "id": "#8822", "item": "ErgoChair Pro", "status": "Processing", "cost": 499, "eta": "Pending" }
+            ]
+        };
+        const EXCHANGE_RATES = { "USD": 1, "EUR": 0.92, "GBP": 0.79, "JPY": 150.2, "INR": 83.5 };
+
+        const state = {
+            
+            db: JSON.parse(JSON.stringify(DEFAULT_DB_TEMPLATE)), 
+            apiKey: "AIzaSyBQiDK7E-g7l2NCWI5MYSNEYrytYKIvBJc",
+            isListening: false,
+            isOffline: false,
+            queryCount: 0,
+            userId: null
+        };
+
+        // Holds Firebase modules after dynamic load
+        let firebaseModules = {
+            auth: null,
+            db: null,
+            updateDoc: null,
+            doc: null,
+            setDoc: null,
+            onSnapshot: null,
+            appId: null
+        };
+
+      
+        const dbService = {
+            docRef: null,
+            
+            init: async () => {
+                try {
+                    console.log("Starting background cloud sync...");
+                    
+                    // DYNAMIC IMPORT: This prevents blocking the UI load
+                    const [firebaseApp, firebaseAuth, firebaseFirestore] = await Promise.all([
+                        import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js"),
+                        import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"),
+                        import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js")
+                    ]);
+
+                    // Initialize Firebase in memory
+                    const firebaseConfig = JSON.parse(__firebase_config);
+                    const app = firebaseApp.initializeApp(firebaseConfig);
+                    const auth = firebaseAuth.getAuth(app);
+                    const db = firebaseFirestore.getFirestore(app);
+                    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+                   
+                    firebaseModules = {
+                        auth: auth,
+                        db: db,
+                        updateDoc: firebaseFirestore.updateDoc,
+                        doc: firebaseFirestore.doc,
+                        setDoc: firebaseFirestore.setDoc,
+                        onSnapshot: firebaseFirestore.onSnapshot,
+                        appId: appId,
+                        signInAnonymously: firebaseAuth.signInAnonymously,
+                        onAuthStateChanged: firebaseAuth.onAuthStateChanged
+                    };
+
+                    // Auth Flow
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await firebaseAuth.signInAnonymously(auth); // Fallback for demo simplicity
+                        } else {
+                            await firebaseAuth.signInAnonymously(auth);
+                        }
+                    } catch (e) {
+                        console.warn("Auth handshake warning:", e);
+                    }
+
+                    // Listen for User
+                    firebaseAuth.onAuthStateChanged(auth, async (user) => {
+                        if (user) {
+                            state.userId = user.uid;
+                            dbService.docRef = firebaseFirestore.doc(db, 'artifacts', appId, 'public', 'data', 'voicebot_store');
+                            dbService.subscribe();
+                        }
+                    });
+                    
+                    // UI Update on success
+                    ui.updateCloudStatus(true);
+
+                } catch (e) {
+                    console.error("Background Sync Failed:", e);
+                    // Silent fail - app works in local mode
+                }
+            },
+
+            subscribe: () => {
+                if (!firebaseModules.onSnapshot || !dbService.docRef) return;
+                
+                // Real-time Listener
+                firebaseModules.onSnapshot(dbService.docRef, (snapshot) => {
+                    if (snapshot.exists()) {
+                        state.db = snapshot.data();
+                        ui.updateDB(); // Update view when cloud data arrives
+                    } else {
+                        firebaseModules.setDoc(dbService.docRef, DEFAULT_DB_TEMPLATE);
+                    }
+                }, (error) => {
+                    console.error("DB Sync Error:", error);
+                });
+            },
+
+            update: async (pathArray, value) => {
+                // If Firebase isn't loaded yet, we just log it. User still gets voice response.
+                if (!dbService.docRef || !firebaseModules.updateDoc) {
+                    console.warn("Cloud not ready, update skipped (local only)");
+                    return;
+                }
+                
+                const dotPath = pathArray.join('.');
+                try {
+                    await firebaseModules.updateDoc(dbService.docRef, {
+                        [dotPath]: value
+                    });
+                    console.log(`Backend Updated: ${dotPath} = ${value}`);
+                } catch (e) {
+                    console.error("Update failed", e);
+                }
+            },
+
+            reset: async () => {
+                if (!dbService.docRef || !firebaseModules.setDoc) return;
+                await firebaseModules.setDoc(dbService.docRef, DEFAULT_DB_TEMPLATE);
+                ui.addMessage('system', "Cloud Database reset to default state.");
+            }
+        };
+        
+        // Expose for UI buttons
+        window.dbService = dbService;
+
+
+        // ==========================================
+        //  2. VOICE ENGINE (TTS)
+        // ==========================================
+        class VoiceEngine {
+            constructor() {
+                this.synth = window.speechSynthesis;
+                this.voices = [];
+                if (speechSynthesis.onvoiceschanged !== undefined) {
+                    speechSynthesis.onvoiceschanged = () => { this.voices = this.synth.getVoices(); };
+                }
+            }
+
+            speak(text) {
+                if (this.synth.speaking) this.synth.cancel();
+                const cleanText = text.replace(/[*#_`]/g, '').replace(/\[.*?\]/g, '');
+                const utter = new SpeechSynthesisUtterance(cleanText);
+                const preferred = this.voices.find(v => v.name.includes("Google US English")) || 
+                                  this.voices.find(v => v.name.includes("Samantha")) ||
+                                  this.voices.find(v => v.lang === "en-US");
+                if (preferred) utter.voice = preferred;
+                utter.rate = 1.05;
+                utter.pitch = 1.0;
+                utter.onstart = () => ui.setVisualizer(true);
+                utter.onend = () => ui.setVisualizer(false);
+                this.synth.speak(utter);
+            }
+
+            stop() {
+                this.synth.cancel();
+                ui.setVisualizer(false);
+            }
+        }
+        const voice = new VoiceEngine();
+
+        // ==========================================
+        //  3. INTELLIGENCE CORE (Hybrid)
+        // ==========================================
+        
+        async function handleQuery(text) {
+            if (!text.trim()) return;
+            voice.stop();
+            ui.addMessage('user', text);
+            ui.setMicState('processing');
+            ui.incrementCount();
+
+            // Start Timer
+            const startTime = performance.now();
+
+            let response;
+            let modeUsed = "offline";
+
+            // A. TRY ONLINE (AI) - SMART SELECTOR
+            if (state.apiKey && !state.isOffline) {
+                try {
+                    ui.setSystemStatus("Consulting Gemini AI...", "text-indigo-400");
+                    const aiResult = await querySmartGemini(text);
+                    response = aiResult.data;
+                    modeUsed = aiResult.modelName;
+                } catch (e) {
+                    console.warn("All Gemini models failed. Falling back.", e);
+                    ui.addMessage('system', `<i class="fas fa-exclamation-triangle mr-1"></i> Network/API Issue. Switching to Offline Brain.`);
+                    response = queryOfflineBrain(text);
+                    state.isOffline = true;
+                }
+            } 
+            // B. USE OFFLINE
+            else {
+                if(!state.apiKey) ui.setSystemStatus("Offline (No Key)", "text-amber-400");
+                response = queryOfflineBrain(text);
+            }
+
+            // C. EXECUTE & RESPOND (Backend Update)
+            if (response.updates) {
+                // Update local state instantly
+                const u = response.updates;
+                let t = state.db;
+                for (let i = 0; i < u.path.length - 1; i++) t = t[u.path[i]];
+                t[u.path[u.path.length - 1]] = u.value;
+                ui.updateDB();
+                
+                // Attempt Cloud Sync (Fire and forget)
+                dbService.update(response.updates.path, response.updates.value);
+            }
+            
+            let metaTag = "Offline Logic";
+            if (modeUsed !== "offline") {
+                metaTag = modeUsed.replace('models/', '').toUpperCase().replace('PREVIEW', '').replace('09-2025', '').replace(/-/g, ' ').trim();
+            }
+            
+            // Calculate Latency
+            const endTime = performance.now();
+            const latency = Math.round(endTime - startTime);
+            ui.updateLatency(latency);
+
+            ui.addMessage('bot', response.text, metaTag);
+            voice.speak(response.text);
+            
+            ui.setMicState('idle');
+            ui.updateStatusDisplay();
+        }
+
+        // --- SMART AI BRAIN ---
+        async function querySmartGemini(userText) {
+            const MODELS = ["gemini-2.5-flash-preview-09-2025", "gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro"];
+            const systemPrompt = {
+                role: "system",
+                text: `You are a Voice Bot connected to a live JSON database.
+                CONTEXT: ${JSON.stringify(state.db)}
+                DATE: ${new Date().toLocaleDateString()}
+                INSTRUCTIONS:
+                1. Be concise and conversational. Spoken output.
+                2. If the user wants to CHANGE data (e.g. "change name", "cancel order"), return an "updates" object.
+                3. For cancellations, set order status to "Cancelled".
+                RESPONSE FORMAT (Strict JSON):
+                { "text": "Spoken response", "updates": { "path": ["orders", 0, "status"], "value": "Cancelled" } (OPTIONAL) }`
+            };
+
+            let lastError = null;
+            for (const model of MODELS) {
+                try {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${state.apiKey}`;
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: systemPrompt.text + "\nUSER SAYS: " + userText }] }],
+                            generationConfig: { responseMimeType: "application/json" }
+                        })
+                    });
+
+                    if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+                    const data = await res.json();
+                    if (!data.candidates || !data.candidates[0]) throw new Error("Empty Response");
+
+                    const rawText = data.candidates[0].content.parts[0].text;
+                    return { data: JSON.parse(rawText), modelName: model };
+                } catch (e) {
+                    lastError = e;
+                }
+            }
+            throw lastError || new Error("All AI models unreachable");
+        }
+
+        // --- OFFLINE BRAIN ---
+        function queryOfflineBrain(text) {
+            const q = text.toLowerCase();
+            const db = state.db;
+
+            const convMatch = q.match(/convert (\d+)\s?([a-z]{3}) to ([a-z]{3})/i);
+            if (convMatch) {
+                const amt = parseFloat(convMatch[1]);
+                const from = convMatch[2].toUpperCase();
+                const to = convMatch[3].toUpperCase();
+                if(EXCHANGE_RATES[from] && EXCHANGE_RATES[to]) {
+                    const res = ((amt / EXCHANGE_RATES[from]) * EXCHANGE_RATES[to]).toFixed(2);
+                    return { text: `${amt} ${from} is approximately ${res} ${to}.` };
+                }
+            }
+            if (q.includes('balance') || q.includes('money')) {
+                return { text: `Your current balance is ${db.user.balance} ${db.user.currency}.` };
+            }
+            if (q.includes('order') || q.includes('status')) {
+                const o = db.orders[0];
+                return { text: `Your order for ${o.item} is currently ${o.status}.` };
+            }
+            if (q.includes('cancel') && (q.includes('order') || q.includes('item'))) {
+                const idx = db.orders.findIndex(o => o.status === "Processing");
+                if (idx > -1) {
+                    return {
+                        text: `I have successfully cancelled the ${db.orders[idx].item}.`,
+                        updates: { path: ["orders", idx, "status"], value: "Cancelled" }
+                    };
+                }
+                return { text: "I couldn't find any orders eligible for cancellation." };
+            }
+            if ((q.includes('change') || q.includes('update')) && q.includes('name')) {
+                const words = q.split(" ");
+                const newName = words[words.length - 1];
+                return { text: `I've updated your profile name to ${newName}.`, updates: { path: ["user", "name"], value: newName } };
+            }
+            return { text: "I'm in Offline Mode. I can help with balances, orders, and currency conversion." };
+        }
+
+        // ==========================================
+        //  4. UI CONTROLLER
+        // ==========================================
+        const ui = {
+            els: {
+                micBtn: document.getElementById('mic-btn'),
+                transcript: document.getElementById('live-transcript'),
+                visualizer: document.getElementById('visualizer'),
+                chat: document.getElementById('chat-container'),
+                dbView: document.getElementById('db-view'),
+                statusDot: document.getElementById('status-dot'),
+                statusText: document.getElementById('status-text'),
+                statusPill: document.getElementById('status-pill'),
+                statQueries: document.getElementById('stat-queries'),
+                statLatency: document.getElementById('stat-latency'), // New Element
+                micStatusMain: document.getElementById('mic-status-main'),
+                micStatusSub: document.getElementById('mic-status-sub'),
+                modal: document.getElementById('settings-modal'),
+                apiKeyInput: document.getElementById('api-key-input'),
+                cloudDot: document.getElementById('cloud-status-dot'),
+                cloudText: document.getElementById('cloud-status-text')
+            },
+
+            init: () => {
+                // 1. Render Initial State INSTANTLY
+                ui.updateDB(); 
+                ui.updateStatusDisplay();
+                ui.setSystemStatus("Ready", "text-slate-400");
+                
+                // 2. Start Loading Firebase in Background (Lazy Load)
+                setTimeout(() => {
+                    dbService.init();
+                }, 100);
+            },
+
+            updateDB: () => {
+                if (state.db) {
+                    ui.els.dbView.textContent = JSON.stringify(state.db, null, 2);
+                }
+            },
+            
+            updateCloudStatus: (connected) => {
+                if (connected) {
+                    ui.els.cloudDot.className = "w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse";
+                    ui.els.cloudText.className = "text-[10px] text-emerald-500 font-mono uppercase tracking-wider";
+                    ui.els.cloudText.textContent = "Cloud Synced";
+                    // Removed syncStatus update as element was replaced
+                }
+            },
+
+            toggleSettings: () => {
+                ui.els.modal.classList.toggle('hidden');
+                if(!ui.els.modal.classList.contains('hidden')) ui.els.apiKeyInput.value = state.apiKey;
+            },
+            
+            updateLatency: (ms) => {
+                ui.els.statLatency.textContent = `${ms}ms`;
+                // Color coding based on speed
+                if(ms < 500) ui.els.statLatency.className = "text-xl font-mono font-bold text-emerald-400";
+                else if(ms < 1500) ui.els.statLatency.className = "text-xl font-mono font-bold text-warning";
+                else ui.els.statLatency.className = "text-xl font-mono font-bold text-rose-400";
+            },
+
+            setVisualizer: (active) => { ui.els.visualizer.classList.toggle('viz-active', active); },
+
+            setMicState: (mode) => {
+                const { micBtn, transcript, micStatusMain, micStatusSub } = ui.els;
+                if (mode === 'listening') {
+                    micBtn.innerHTML = '<i class="fas fa-stop"></i>';
+                    micBtn.className = "w-14 h-14 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-[0_0_30px_rgba(244,63,94,0.6)] animate-pulse";
+                    micStatusMain.textContent = "Listening..."; micStatusSub.textContent = "Speak clearly now";
+                    transcript.classList.remove('opacity-0');
+                } else if (mode === 'processing') {
+                    micBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+                    micBtn.className = "w-14 h-14 rounded-full bg-slate-700 text-indigo-400 flex items-center justify-center";
+                    micStatusMain.textContent = "Processing"; micStatusSub.textContent = "Analyzing...";
+                } else {
+                    micBtn.innerHTML = '<i class="fas fa-microphone text-xl group-hover:scale-110 transition-transform"></i>';
+                    micBtn.className = "w-14 h-14 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center shadow-[0_0_25px_rgba(79,70,229,0.4)] hover:shadow-[0_0_35px_rgba(79,70,229,0.6)] transition-all active:scale-95 group border border-indigo-400/30";
+                    micStatusMain.textContent = "Microphone Ready"; micStatusSub.textContent = "Tap button to speak";
+                    transcript.classList.add('opacity-0');
+                }
+            },
+
+            addMessage: (role, text, meta) => {
+                const div = document.createElement('div');
+                div.className = `flex gap-4 animate-fade-in ${role === 'user' ? 'flex-row-reverse' : ''}`;
+                const bubbleStyle = role === 'bot' ? 'msg-bot' : 'msg-user';
+                const textColor = role === 'bot' ? 'text-slate-200' : 'text-slate-300';
+                const icon = role === 'bot' ? 'fa-robot' : 'fa-user';
+                const iconBg = role === 'bot' ? 'bg-indigo-600' : 'bg-slate-700';
+
+                let metaHtml = '';
+                if (meta) {
+                    const isAI = !meta.toLowerCase().includes('offline');
+                    const color = isAI ? "text-emerald-400" : "text-amber-400";
+                    const iconClass = isAI ? "fa-bolt" : "fa-microchip";
+                    metaHtml = `<div class="mt-2 pt-2 border-t border-white/5 text-[10px] font-mono ${color} flex items-center gap-2 uppercase tracking-wider"><i class="fas ${iconClass}"></i> ${meta}</div>`;
+                }
+                div.innerHTML = `
+                    <div class="w-9 h-9 rounded-lg ${iconBg} flex items-center justify-center shrink-0 text-white text-xs shadow-lg mt-1"><i class="fas ${icon}"></i></div>
+                    <div class="${bubbleStyle} px-5 py-3.5 rounded-2xl ${textColor} shadow-sm max-w-[85%] md:max-w-[75%]"><div class="leading-relaxed">${marked.parse(text)}</div>${metaHtml}</div>
+                `;
+                ui.els.chat.appendChild(div);
+                ui.els.chat.scrollTo({ top: ui.els.chat.scrollHeight, behavior: 'smooth' });
+            },
+
+            updateStatusDisplay: () => {
+                const { statusPill, statusDot, statusText } = ui.els;
+                if (state.apiKey && !state.isOffline) {
+                    statusPill.className = "hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20";
+                    statusDot.className = "w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]";
+                    statusText.className = "text-[11px] font-mono font-bold text-emerald-400 uppercase";
+                    statusText.textContent = "Gemini AI Active";
+                } else {
+                    statusPill.className = "hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20";
+                    statusDot.className = "w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]";
+                    statusText.className = "text-[11px] font-mono font-bold text-amber-400 uppercase";
+                    statusText.textContent = "Offline Mode";
+                }
+            },
+
+            setSystemStatus: (msg, colorClass) => {
+                 ui.els.statusText.textContent = msg;
+                 ui.els.statusText.className = `text-[11px] font-mono font-bold uppercase ${colorClass}`;
+            },
+
+            incrementCount: () => { ui.els.statQueries.textContent = ++state.queryCount; }
+        };
+
+        // ==========================================
+        //  5. SETUP & HANDLERS
+        // ==========================================
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+            recognition.onstart = () => { state.isListening = true; ui.setMicState('listening'); };
+            recognition.onend = () => { state.isListening = false; if(ui.els.micBtn.innerHTML.includes('spin')) return; ui.setMicState('idle'); };
+            recognition.onresult = (event) => {
+                const transcript = Array.from(event.results).map(r => r[0].transcript).join('');
+                ui.els.transcript.textContent = transcript;
+                if (event.results[0].isFinal) handleQuery(transcript);
+            };
+            recognition.onerror = (e) => { ui.setMicState('idle'); if(e.error === 'not-allowed') ui.addMessage('system', "Please allow microphone access."); };
+        } else {
+            ui.addMessage('system', "Error: This browser does not support Speech Recognition.");
+        }
+
+        ui.els.micBtn.addEventListener('click', () => { if (!recognition) return; if (state.isListening) recognition.stop(); else recognition.start(); });
+
+        window.app = {
+            saveSettings: () => {
+                const val = ui.els.apiKeyInput.value.trim();
+                state.apiKey = val;
+                state.isOffline = false; 
+                ui.toggleSettings();
+                ui.updateStatusDisplay();
+                ui.addMessage('system', val ? "API Key saved. Attempting AI connection..." : "API Key cleared. Switching to Offline Mode.");
+            }
+        };
+
+        ui.init();
+
+    </script>
+</body>
+</html>
